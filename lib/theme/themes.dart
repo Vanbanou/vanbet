@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class AppThemes {
   // Cores Premium
-  static const Color _primaryGreen = Color(0xFF006400); // Dark Green
+  static const Color _primaryGreen = Color(0xFF27AC6A); // Dark Green
   static const Color _secondaryGreen = Color(0xFF2E8B57); // Sea Green
   static const Color _accentGreen = Color(0xFF32CD32); // Lime Green
   static const Color _surfaceLight = Color(0xFFF5F5F5);

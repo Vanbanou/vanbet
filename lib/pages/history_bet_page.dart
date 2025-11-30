@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+enum SortOption { dateDesc, dateAsc, amountDesc, amountAsc, status }
+
 class HistoryBetPage extends StatefulWidget {
   const HistoryBetPage({super.key});
 
@@ -13,6 +15,7 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
   List<Map<String, dynamic>> _bets = [];
   double _bank = 0.0;
   double _totalSpent = 0.0;
+  SortOption _currentSortOption = SortOption.dateDesc;
 
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _oddController = TextEditingController();
@@ -377,9 +380,41 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
     );
   }
 
+  List<Map<String, dynamic>> get _sortedBets {
+    List<Map<String, dynamic>> sortedList = List.from(_bets);
+    switch (_currentSortOption) {
+      case SortOption.dateDesc:
+        sortedList.sort((a, b) => b['date'].compareTo(a['date']));
+        break;
+      case SortOption.dateAsc:
+        sortedList.sort((a, b) => a['date'].compareTo(b['date']));
+        break;
+      case SortOption.amountDesc:
+        sortedList.sort((a, b) => b['amount'].compareTo(a['amount']));
+        break;
+      case SortOption.amountAsc:
+        sortedList.sort((a, b) => a['amount'].compareTo(b['amount']));
+        break;
+      case SortOption.status:
+        sortedList.sort((a, b) {
+          String statusA = a['status'] ?? 'Pendente';
+          String statusB = b['status'] ?? 'Pendente';
+          return statusA.compareTo(statusB);
+        });
+        break;
+    }
+    return sortedList;
+  }
+
+  String _formatDate(DateTime date) {
+    return "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}";
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final sortedBets = _sortedBets;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Histórico de Apostas"),
@@ -389,7 +424,7 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
             icon: const Icon(Icons.add),
             tooltip: "Adicionar Aposta",
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 12),
         ],
       ),
       body: SingleChildScrollView(
@@ -400,12 +435,48 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
             children: [
               _buildBankrollCard(theme),
               const SizedBox(height: 24),
-              const Text(
-                "Suas Apostas",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Suas Apostas",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  PopupMenuButton<SortOption>(
+                    icon: const Icon(Icons.sort),
+                    onSelected: (SortOption result) {
+                      setState(() {
+                        _currentSortOption = result;
+                      });
+                    },
+                    itemBuilder: (BuildContext context) =>
+                        <PopupMenuEntry<SortOption>>[
+                          const PopupMenuItem<SortOption>(
+                            value: SortOption.dateDesc,
+                            child: Text('Data (Mais recente)'),
+                          ),
+                          const PopupMenuItem<SortOption>(
+                            value: SortOption.dateAsc,
+                            child: Text('Data (Mais antiga)'),
+                          ),
+                          const PopupMenuItem<SortOption>(
+                            value: SortOption.amountDesc,
+                            child: Text('Valor (Maior)'),
+                          ),
+                          const PopupMenuItem<SortOption>(
+                            value: SortOption.amountAsc,
+                            child: Text('Valor (Menor)'),
+                          ),
+                          const PopupMenuItem<SortOption>(
+                            value: SortOption.status,
+                            child: Text('Estado'),
+                          ),
+                        ],
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
-              _bets.isEmpty
+              sortedBets.isEmpty
                   ? Padding(
                       padding: const EdgeInsets.symmetric(vertical: 32.0),
                       child: Center(
@@ -418,9 +489,9 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
                   : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _bets.length,
+                      itemCount: sortedBets.length,
                       itemBuilder: (context, index) {
-                        final bet = _bets[index];
+                        final bet = sortedBets[index];
                         final isWin = bet['status'] == 'Ganhou';
                         final isLose = bet['status'] == 'Perdeu';
 
@@ -449,13 +520,15 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('${bet['amount']} Kz @ ${bet['odd']}'),
                                 Text(
-                                  '${bet['date'].toString().split(' ')[0]}',
+                                  _formatDate(bet['date']),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey,
@@ -465,12 +538,16 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
                             ),
                             trailing: PopupMenuButton(
                               onSelected: (value) {
+                                // Find original index in _bets
+                                int originalIndex = _bets.indexOf(bet);
+                                if (originalIndex == -1) return;
+
                                 if (value == 'win') {
-                                  _markBet(index, true);
+                                  _markBet(originalIndex, true);
                                 } else if (value == 'lose') {
-                                  _markBet(index, false);
+                                  _markBet(originalIndex, false);
                                 } else if (value == 'edit') {
-                                  _editBet(index);
+                                  _editBet(originalIndex);
                                 } else if (value == 'delete') {
                                   showDialog(
                                     context: context,
@@ -487,7 +564,7 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
                                         TextButton(
                                           onPressed: () {
                                             Navigator.pop(ctx);
-                                            _deleteBet(index);
+                                            _deleteBet(originalIndex);
                                           },
                                           child: const Text(
                                             "Excluir",
@@ -549,11 +626,12 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
                         );
                       },
                     ),
+              const SizedBox(height: 80),
             ],
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
           // Simulação de adicionar fundos
           showDialog(
@@ -587,8 +665,8 @@ class _HistoryBetPageState extends State<HistoryBetPage> {
             },
           );
         },
-        label: const Text("Fundos"),
-        icon: const Icon(Icons.account_balance_wallet),
+
+        child: const Icon(Icons.account_balance_wallet),
       ),
     );
   }

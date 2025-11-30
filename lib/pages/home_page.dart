@@ -53,7 +53,7 @@ class _HomePageState extends State<HomePage> {
         elevation: 0,
         centerTitle: false,
         leading: Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(12.0),
 
           child: Image.asset('assets/icon.png'),
         ),
