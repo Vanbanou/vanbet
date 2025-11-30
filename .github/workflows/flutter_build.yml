@@ -1,0 +1,45 @@
+name: Build Flutter AppBundle
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # permite iniciar o build manualmente
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'build')
+    runs-on: ubuntu-latest
+
+    
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.4'
+
+      - name: Instalar dependências
+        run: flutter pub get
+
+      # - name: Decodificar Keystore e Criar key.properties
+      #   run: |
+      #     echo "${{ secrets.chave }}" | base64 --decode > android/app/keystore.jks
+
+      #     echo "storeFile=keystore.jks" > android/key.properties
+      #     echo "keyAlias=alias" >> android/key.properties
+      #     echo "keyPassword=123456" >> android/key.properties
+      #     echo "storePassword=123456" >> android/key.properties
+      #   shell: bash
+
+      - name: Build Split APKs (Release)
+        run: flutter build apk --split-per-abi --release
+
+      - name: Upload Split APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: apks-release
+          path: build/app/outputs/flutter-apk/*.apk
+
