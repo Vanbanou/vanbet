@@ -75,7 +75,7 @@ class _HomePageState extends State<HomePage> {
                 gradient: LinearGradient(
                   colors: [
                     Theme.of(context).cardTheme.color!,
-                    Theme.of(context).cardTheme.color!.withOpacity(0.9),
+                    Theme.of(context).cardTheme.color!.withAlpha(200),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -83,15 +83,11 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(25),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withAlpha(20),
                     blurRadius: 10,
                     offset: const Offset(0, 5),
                   ),
                 ],
-                border: Border.all(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  width: 1,
-                ),
               ),
               child: Material(
                 color: Colors.transparent,

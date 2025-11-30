@@ -230,13 +230,13 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
                             size: 16,
                             color: Colors.grey,
                           ),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.arrow_forward),
+                            onPressed: _navigate,
+                          ),
                         ),
                         onSubmitted: (_) => _navigate(),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.arrow_forward),
-                      onPressed: _navigate,
                     ),
                   ],
                 ),
@@ -384,8 +384,8 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
       floatingActionButton: _currentIndex == 0
           ? FloatingActionButton(
               onPressed: _addMonitor,
-              child: const Icon(Icons.add_chart),
               tooltip: "Adicionar Monitor",
+              child: const Icon(Icons.add_chart),
             )
           : null,
     );
