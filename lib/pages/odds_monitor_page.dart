@@ -127,13 +127,16 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
   }
 
   void _navigate() {
-    final url = _urlController.text;
-    if (url.isNotEmpty) {
-      _controller.loadRequest(
-        Uri.parse(url.startsWith('http') ? url : 'https://$url'),
-      );
-      FocusScope.of(context).unfocus();
+    String url = _urlController.text.trim();
+    if (url.isEmpty) return;
+
+    // Add https:// if no protocol specified
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
     }
+
+    _controller.loadRequest(Uri.parse(url));
+    FocusScope.of(context).unfocus();
   }
 
   void _toggleMonitorMode() {
@@ -302,7 +305,7 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
   }
 
   Future<bool> _onWillPop() async {
-    // Check if we can go back in browser
+    // If in browser view and can go back, navigate back
     if (_currentIndex == 0 && await _controller.canGoBack()) {
       _controller.goBack();
       return false;
@@ -343,7 +346,35 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
       onWillPop: _onWillPop,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Monitor de Odds'),
+          title: _currentIndex == 0
+              ? TextField(
+                  controller: _urlController,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: "Digite a URL",
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade400,
+                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade200,
+                    prefixIcon: const Icon(Icons.language, size: 18),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      onPressed: _navigate,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ),
+                  onSubmitted: (_) => _navigate(),
+                )
+              : const Text('Dashboard'),
           elevation: 0,
           actions: _currentIndex == 0
               ? [
@@ -367,43 +398,6 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
             // Index 0: Browser View
             Column(
               children: [
-                // URL Bar
-                Container(
-                  padding: const EdgeInsets.all(8.0),
-                  color: Colors.white,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _urlController,
-                          decoration: InputDecoration(
-                            hintText: "Digite a URL",
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 0,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(30),
-                              borderSide: BorderSide.none,
-                            ),
-                            filled: true,
-                            fillColor: Colors.grey.shade200,
-                            prefixIcon: const Icon(
-                              Icons.lock,
-                              size: 16,
-                              color: Colors.grey,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: const Icon(Icons.arrow_forward),
-                              onPressed: _navigate,
-                            ),
-                          ),
-                          onSubmitted: (_) => _navigate(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 if (_isLoading) const LinearProgressIndicator(minHeight: 2),
                 Expanded(child: WebViewWidget(controller: _controller)),
               ],
