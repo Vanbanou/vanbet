@@ -1,19 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Modelo simples para organizar os detalhes de cada aposta
-class BetDetail {
-  final double odd;
-  final double stake;
-  final double potentialReturn;
-
-  BetDetail({
-    required this.odd,
-    required this.stake,
-    required this.potentialReturn,
-  });
-}
-
 class SureBetPage extends StatefulWidget {
   const SureBetPage({super.key});
 
@@ -22,15 +9,17 @@ class SureBetPage extends StatefulWidget {
 }
 
 class _SureBetPageState extends State<SureBetPage> {
-  // --- ESTADO E CONTROLE ---
   final List<double> _oddList = [];
   final List<BetDetail> _calculationDetails = [];
 
   final TextEditingController _oddsController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _bonusController = TextEditingController();
   final FocusNode _amountFocusNode = FocusNode();
 
+  bool _isPercentageBonus = false;
   double _totalAmount = 0;
+  double _actualCost = 0;
   double _totalReturn = 0;
   double _profitOrLoss = 0;
   double _roi = 0;
@@ -45,11 +34,10 @@ class _SureBetPageState extends State<SureBetPage> {
   void dispose() {
     _oddsController.dispose();
     _amountController.dispose();
+    _bonusController.dispose();
     _amountFocusNode.dispose();
     super.dispose();
   }
-
-  // --- LÓGICA DE PERSISTÊNCIA ---
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -64,6 +52,10 @@ class _SureBetPageState extends State<SureBetPage> {
     final double amount = prefs.getDouble('totalAmountSure') ?? 0.0;
     if (amount > 0) _amountController.text = amount.toString();
 
+    final double bonus = prefs.getDouble('bonusValueSure') ?? 0.0;
+    if (bonus > 0) _bonusController.text = bonus.toString();
+    _isPercentageBonus = prefs.getBool('isPercentageBonusSure') ?? false;
+
     _calculateSureBet();
   }
 
@@ -73,23 +65,35 @@ class _SureBetPageState extends State<SureBetPage> {
       'oddsListSure',
       _oddList.map((e) => e.toString()).toList(),
     );
+
     final double amount =
         double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
-    await prefs.setDouble('totalAmountSure', amount);
-  }
+    final double bonus =
+        double.tryParse(_bonusController.text.replaceAll(',', '.')) ?? 0.0;
 
-  // --- LÓGICA DE CÁLCULO ---
+    await prefs.setDouble('totalAmountSure', amount);
+    await prefs.setDouble('bonusValueSure', bonus);
+    await prefs.setBool('isPercentageBonusSure', _isPercentageBonus);
+  }
 
   void _calculateSureBet() {
     _totalAmount =
         double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0;
+    double bonusInput =
+        double.tryParse(_bonusController.text.replaceAll(',', '.')) ?? 0;
+
+    double bonusValue = _isPercentageBonus
+        ? (_totalAmount * (bonusInput / 100))
+        : bonusInput;
+    _actualCost = (_totalAmount - bonusValue).clamp(0, double.infinity);
+
     _calculationDetails.clear();
 
     if (_totalAmount > 0 && _oddList.isNotEmpty) {
       double inverseSum = _oddList.fold(0, (sum, odd) => sum + (1 / odd));
       _totalReturn = _totalAmount / inverseSum;
-      _profitOrLoss = _totalReturn - _totalAmount;
-      _roi = (_profitOrLoss / _totalAmount) * 100;
+      _profitOrLoss = _totalReturn - _actualCost;
+      _roi = _actualCost > 0 ? (_profitOrLoss / _actualCost) * 100 : 0;
 
       for (var odd in _oddList) {
         double stake = (_totalAmount / odd) / inverseSum;
@@ -105,8 +109,6 @@ class _SureBetPageState extends State<SureBetPage> {
     setState(() {});
     _saveData();
   }
-
-  // --- AÇÕES ---
 
   void _addOdd() {
     final double? val = double.tryParse(
@@ -126,15 +128,15 @@ class _SureBetPageState extends State<SureBetPage> {
       _oddList.clear();
       _oddsController.clear();
       _amountController.clear();
+      _bonusController.clear();
       _calculationDetails.clear();
       _totalReturn = 0;
       _profitOrLoss = 0;
       _roi = 0;
+      _actualCost = 0;
     });
     _saveData();
   }
-
-  // --- INTERFACE (UI) ---
 
   @override
   Widget build(BuildContext context) {
@@ -145,9 +147,7 @@ class _SureBetPageState extends State<SureBetPage> {
           IconButton(
             onPressed: _cleanAll,
             icon: const Icon(Icons.cleaning_services_outlined),
-            tooltip: "Limpar tudo",
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
@@ -179,7 +179,7 @@ class _SureBetPageState extends State<SureBetPage> {
                 prefixIcon: const Icon(Icons.trending_up),
                 suffixIcon: IconButton(
                   onPressed: _addOdd,
-                  icon:  Icon(
+                  icon: Icon(
                     Icons.add_circle,
                     color: Theme.of(context).primaryColor,
                     size: 30,
@@ -196,13 +196,49 @@ class _SureBetPageState extends State<SureBetPage> {
               controller: _amountController,
               focusNode: _amountFocusNode,
               decoration: const InputDecoration(
-                labelText: "Investimento Total (Kz)",
+                labelText: "Valor na Banca (Kz)",
                 prefixIcon: Icon(Icons.account_balance_wallet),
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               onChanged: (_) => _calculateSureBet(),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _bonusController,
+                    decoration: InputDecoration(
+                      labelText: _isPercentageBonus
+                          ? "Bónus (%)"
+                          : "Bónus (Kz)",
+                      prefixIcon: const Icon(Icons.card_giftcard),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    onChanged: (_) => _calculateSureBet(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ToggleButtons(
+                  isSelected: [!_isPercentageBonus, _isPercentageBonus],
+                  onPressed: (index) {
+                    setState(() {
+                      _isPercentageBonus = index == 1;
+                      _calculateSureBet();
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  constraints: const BoxConstraints(
+                    minHeight: 45,
+                    minWidth: 45,
+                  ),
+                  children: const [Text("Kz"), Text("%")],
+                ),
+              ],
             ),
           ],
         ),
@@ -237,11 +273,9 @@ class _SureBetPageState extends State<SureBetPage> {
               ).primaryColor.withValues(alpha: 0.1),
               child: Text(
                 "${index + 1}",
-
                 style: TextStyle(
                   color: Theme.of(context).primaryColor,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
                 ),
               ),
             ),
@@ -268,24 +302,29 @@ class _SureBetPageState extends State<SureBetPage> {
     final bool isProfitable = _profitOrLoss > 0;
     return Card(
       color: Colors.white,
-elevation: 4,
+      elevation: 4,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            _resultRow(
+              "Custo Real (Seu Bolso):",
+              "${_actualCost.toStringAsFixed(2)} Kz",
+              bold: true,
+            ),
             _resultRow(
               "Possível Retorno:",
               "${_totalReturn.toStringAsFixed(2)} Kz",
             ),
             const SizedBox(height: 8),
             _resultRow(
-              isProfitable ? "Lucro Garantido:" : "Prejuízo Estimado:",
+              isProfitable ? "Lucro Real Garantido:" : "Prejuízo Estimado:",
               "${isProfitable ? '+' : ''}${_profitOrLoss.toStringAsFixed(2)} Kz",
               valueColor: isProfitable ? Colors.green : Colors.red,
               bold: true,
             ),
             _resultRow(
-              "ROI:",
+              "ROI Real:",
               "${_roi.toStringAsFixed(2)}%",
               valueColor: isProfitable ? Colors.green : Colors.red,
             ),
@@ -329,8 +368,6 @@ elevation: 4,
     );
   }
 
-  // --- DIÁLOGO DE DISTRIBUIÇÃO ---
-
   void _showDetailedDistribution() {
     showModalBottomSheet(
       context: context,
@@ -363,7 +400,7 @@ elevation: 4,
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const Text(
-                    "Divida seu capital da seguinte forma:",
+                    "Divida o valor da banca (Total) assim:",
                     style: TextStyle(fontSize: 13, color: Colors.grey),
                   ),
                   const SizedBox(height: 20),
@@ -399,7 +436,6 @@ elevation: 4,
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
                                     ),
                                   ),
                                 ],
@@ -431,11 +467,15 @@ elevation: 4,
                     ),
                   ),
                   const Divider(),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      "Custo Total: ${_totalAmount.toStringAsFixed(2)} Kz",
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                  Text(
+                    "Total na Banca: ${_totalAmount.toStringAsFixed(2)} Kz",
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    "Você paga apenas: ${_actualCost.toStringAsFixed(2)} Kz",
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
@@ -446,4 +486,16 @@ elevation: 4,
       },
     );
   }
+}
+
+class BetDetail {
+  final double odd;
+  final double stake;
+  final double potentialReturn;
+
+  BetDetail({
+    required this.odd,
+    required this.stake,
+    required this.potentialReturn,
+  });
 }

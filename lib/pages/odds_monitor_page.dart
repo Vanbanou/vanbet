@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MonitorItem {
   String id;
@@ -10,6 +11,7 @@ class MonitorItem {
   String selector;
   String url;
   String currentValue;
+  String previousValue;
   DateTime lastUpdated;
 
   MonitorItem({
@@ -18,15 +20,34 @@ class MonitorItem {
     required this.selector,
     required this.url,
     this.currentValue = '...',
+    this.previousValue = '...',
     required this.lastUpdated,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'selector': selector,
+    'url': url,
+    'currentValue': currentValue,
+    'lastUpdated': lastUpdated.toIso8601String(),
+  };
+
+  factory MonitorItem.fromJson(Map<String, dynamic> json) => MonitorItem(
+    id: json['id'],
+    name: json['name'],
+    selector: json['selector'],
+    url: json['url'],
+    currentValue: json['currentValue'] ?? '...',
+    lastUpdated: DateTime.parse(json['lastUpdated']),
+  );
 }
 
 class OddsMonitorPage extends StatefulWidget {
   const OddsMonitorPage({super.key});
 
   @override
-  _OddsMonitorPageState createState() => _OddsMonitorPageState();
+  State<OddsMonitorPage> createState() => _OddsMonitorPageState();
 }
 
 class _OddsMonitorPageState extends State<OddsMonitorPage> {
@@ -34,12 +55,10 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
   final List<MonitorItem> _monitoredItems = [];
   final TextEditingController _urlController = TextEditingController();
 
-  int _currentIndex = 0; // 0: Browser, 1: Dashboard
+  int _currentIndex = 0;
   bool _isLoading = false;
   bool _isMonitorMode = false;
   Timer? _monitorTimer;
-
-  // Default URL
   String currentUrl = 'https://m.bantubet.co.ao';
 
   @override
@@ -47,22 +66,24 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
     super.initState();
     _urlController.text = currentUrl;
     _initializeController();
+    _loadMonitors();
     _startMonitoring();
   }
 
   @override
   void dispose() {
     _monitorTimer?.cancel();
+    _urlController.dispose();
     super.dispose();
   }
 
   void _initializeController() {
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..enableZoom(true)
       ..addJavaScriptChannel(
         'FlutterMonitor',
         onMessageReceived: (JavaScriptMessage message) {
-          // Parse the message from JavaScript
           try {
             final data = jsonDecode(message.message);
             _showAddMonitorDialog(
@@ -70,7 +91,7 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
               text: data['text'],
             );
           } catch (e) {
-            debugPrint('Error parsing message: $e');
+            debugPrint('JS Channel Error: $e');
           }
         },
       )
@@ -79,30 +100,40 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
           onPageStarted: (url) {
             setState(() {
               _isLoading = true;
-              currentUrl = url;
               _urlController.text = url;
             });
           },
           onPageFinished: (url) {
             setState(() {
               _isLoading = false;
+              currentUrl = url;
             });
-            // Re-inject script if monitor mode is active
-            if (_isMonitorMode) {
-              _injectClickListener();
-            }
-          },
-          onNavigationRequest: (request) {
-            return NavigationDecision.navigate;
+            if (_isMonitorMode) _injectClickListener();
           },
         ),
       )
       ..loadRequest(Uri.parse(currentUrl));
   }
 
+  Future<void> _loadMonitors() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getStringList('monitored_items') ?? [];
+    setState(() {
+      _monitoredItems.addAll(
+        data.map((e) => MonitorItem.fromJson(jsonDecode(e))),
+      );
+    });
+  }
+
+  Future<void> _saveMonitors() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _monitoredItems.map((e) => jsonEncode(e.toJson())).toList();
+    await prefs.setStringList('monitored_items', data);
+  }
+
   void _startMonitoring() {
     _monitorTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
-      if (_monitoredItems.isEmpty) return;
+      if (_monitoredItems.isEmpty || _currentIndex != 1) return;
 
       for (var item in _monitoredItems) {
         try {
@@ -110,18 +141,17 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
             "document.querySelector('${item.selector}').innerText",
           );
 
-          if (result is String) {
-            String cleanResult = result.replaceAll('"', '');
-            if (cleanResult != 'null' && cleanResult.isNotEmpty) {
-              setState(() {
-                item.currentValue = cleanResult;
-                item.lastUpdated = DateTime.now();
-              });
-            }
+          String cleanResult = result.toString().replaceAll('"', '').trim();
+          if (cleanResult != 'null' &&
+              cleanResult.isNotEmpty &&
+              cleanResult != item.currentValue) {
+            setState(() {
+              item.previousValue = item.currentValue;
+              item.currentValue = cleanResult;
+              item.lastUpdated = DateTime.now();
+            });
           }
-        } catch (e) {
-          // Element not found or other error
-        }
+        } catch (_) {}
       }
     });
   }
@@ -129,429 +159,252 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
   void _navigate() {
     String url = _urlController.text.trim();
     if (url.isEmpty) return;
-
-    // Add https:// if no protocol specified
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'https://$url';
-    }
-
+    if (!url.startsWith('http')) url = 'https://$url';
     _controller.loadRequest(Uri.parse(url));
     FocusScope.of(context).unfocus();
   }
 
   void _toggleMonitorMode() {
-    setState(() {
-      _isMonitorMode = !_isMonitorMode;
-    });
-
+    setState(() => _isMonitorMode = !_isMonitorMode);
     if (_isMonitorMode) {
       _injectClickListener();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Modo Monitor ativado. Clique em um elemento.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
     } else {
       _removeClickListener();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Modo Monitor desativado.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
     }
   }
 
   void _injectClickListener() {
     _controller.runJavaScript('''
       (function() {
-        // Remove previous listener if exists
-        if (window.__flutterClickHandler) {
-          document.removeEventListener('click', window.__flutterClickHandler, true);
-        }
-
-        // Create new handler
         window.__flutterClickHandler = function(e) {
           e.preventDefault();
           e.stopPropagation();
-          
-          var element = e.target;
-          var selector = '';
-          
-          // Generate CSS selector
-          if (element.id) {
-            selector = '#' + element.id;
-          } else if (element.className) {
-            var classes = element.className.split(' ').filter(function(c) { return c; });
-            if (classes.length > 0) {
-              selector = '.' + classes.join('.');
-            }
-          }
-          
-          // Fallback to tag name
-          if (!selector) {
-            selector = element.tagName.toLowerCase();
-          }
-          
-          // Get text content
-          var text = element.innerText || element.textContent || '';
-          text = text.trim().substring(0, 50); // Limit to 50 chars
-          
-          // Send to Flutter
+          var el = e.target;
+          var getSelector = function(el) {
+            if (el.id) return '#' + el.id;
+            var path = el.tagName.toLowerCase();
+            if (el.className) path += '.' + el.className.trim().split(/\\s+/).join('.');
+            return path;
+          };
           FlutterMonitor.postMessage(JSON.stringify({
-            selector: selector,
-            text: text
+            selector: getSelector(el),
+            text: el.innerText.substring(0, 30)
           }));
         };
-        
-        // Add listener
         document.addEventListener('click', window.__flutterClickHandler, true);
+        document.body.style.border = '4px solid #4CAF50';
       })();
     ''');
   }
 
   void _removeClickListener() {
     _controller.runJavaScript('''
-      (function() {
-        if (window.__flutterClickHandler) {
-          document.removeEventListener('click', window.__flutterClickHandler, true);
-          delete window.__flutterClickHandler;
-        }
-      })();
+      document.removeEventListener('click', window.__flutterClickHandler, true);
+      document.body.style.border = 'none';
     ''');
   }
 
   void _showAddMonitorDialog({String? selector, String? text}) {
     final nameController = TextEditingController();
-    final selectorController = TextEditingController(text: selector ?? '');
+    final selController = TextEditingController(text: selector);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Adicionar Monitor"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text("Novo Monitor"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (text != null && text.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Texto: "$text"',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
+            if (text != null)
+              Text(
+                "Valor capturado: $text",
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(
-                labelText: "Nome (ex: Vitória Time A)",
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(labelText: "Nome"),
             ),
-            const SizedBox(height: 12),
             TextField(
-              controller: selectorController,
-              decoration: const InputDecoration(
-                labelText: "Seletor CSS (ex: .odd-value)",
-                border: OutlineInputBorder(),
-              ),
+              controller: selController,
+              decoration: const InputDecoration(labelText: "Seletor CSS"),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancelar"),
+            child: const Text("Sair"),
           ),
           ElevatedButton(
             onPressed: () {
-              if (nameController.text.isNotEmpty &&
-                  selectorController.text.isNotEmpty) {
+              if (nameController.text.isNotEmpty) {
                 setState(() {
                   _monitoredItems.add(
                     MonitorItem(
-                      id: DateTime.now().toString(),
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
                       name: nameController.text,
-                      selector: selectorController.text,
+                      selector: selController.text,
                       url: currentUrl,
                       lastUpdated: DateTime.now(),
                     ),
                   );
-                  // Auto-disable monitor mode after adding
                   _isMonitorMode = false;
                   _removeClickListener();
                 });
+                _saveMonitors();
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Monitor adicionado com sucesso!"),
-                  ),
-                );
               }
             },
-            child: const Text("Adicionar"),
+            child: const Text("Salvar"),
           ),
         ],
       ),
     );
-  }
-
-  Future<bool> _onWillPop() async {
-    // If in browser view and can go back, navigate back
-    if (_currentIndex == 0 && await _controller.canGoBack()) {
-      _controller.goBack();
-      return false;
-    }
-
-    // Show exit confirmation
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Sair"),
-        content: const Text("Tem certeza que deseja sair do Monitor de Odds?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text("Cancelar"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text("Sair"),
-          ),
-        ],
-      ),
-    );
-
-    return shouldExit ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(
-      const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-      ),
-    );
-
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (await _controller.canGoBack()) {
+          _controller.goBack();
+        } else {
+          final exit = await _showExitDialog();
+          if (exit) Navigator.of(context).pop();
+        }
+      },
       child: Scaffold(
         appBar: AppBar(
-          title: _currentIndex == 0
-              ? TextField(
-                  controller: _urlController,
-                  style: const TextStyle(fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: "Digite a URL",
-                    hintStyle: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade400,
-                    ),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey.shade200,
-                    prefixIcon: const Icon(Icons.language, size: 18),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.arrow_forward, size: 18),
-                      onPressed: _navigate,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ),
-                  onSubmitted: (_) => _navigate(),
-                )
-              : const Text('Dashboard'),
-          elevation: 0,
-          actions: _currentIndex == 0
-              ? [
-                  IconButton(
-                    icon: Icon(
-                      Icons.touch_app,
-                      color: _isMonitorMode ? Colors.green : null,
-                    ),
-                    onPressed: _toggleMonitorMode,
-                    tooltip: _isMonitorMode
-                        ? "Desativar Modo Monitor"
-                        : "Ativar Modo Monitor",
-                  ),
-                  const SizedBox(width: 8),
-                ]
-              : null,
-        ),
-        body: IndexedStack(
-          index: _currentIndex,
-          children: [
-            // Index 0: Browser View
-            Column(
-              children: [
-                if (_isLoading) const LinearProgressIndicator(minHeight: 2),
-                Expanded(child: WebViewWidget(controller: _controller)),
-              ],
+          backgroundColor: Colors.white,
+          elevation: 1,
+          title: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(20),
             ),
-
-            // Index 1: Dashboard View
-            _monitoredItems.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.analytics_outlined,
-                          size: 64,
-                          color: Colors.grey.shade300,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Nenhum monitor ativo",
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: () => setState(() => _currentIndex = 0),
-                          child: const Text("Ir para o Navegador"),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _monitoredItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _monitoredItems[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _monitoredItems.removeAt(index);
-                                      });
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        "Valor Atual",
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      Text(
-                                        item.currentValue,
-                                        style: const TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      const Text(
-                                        "Última atualização",
-                                        style: TextStyle(
-                                          color: Colors.grey,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      Text(
-                                        "${item.lastUpdated.hour}:${item.lastUpdated.minute}:${item.lastUpdated.second}",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                "Seletor: ${item.selector}",
-                                style: TextStyle(
-                                  color: Colors.grey.shade400,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+            child: TextField(
+              controller: _urlController,
+              decoration: const InputDecoration(
+                hintText: "URL",
+                prefixIcon: Icon(Icons.search, size: 20),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 10),
+              ),
+              onSubmitted: (_) => _navigate(),
+            ),
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(
+                Icons.ads_click,
+                color: _isMonitorMode ? Colors.green : Colors.grey,
+              ),
+              onPressed: _toggleMonitorMode,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            if (_isLoading) const LinearProgressIndicator(minHeight: 2),
+            Expanded(
+              child: IndexedStack(
+                index: _currentIndex,
+                children: [
+                  WebViewWidget(controller: _controller),
+                  _buildDashboard(),
+                ],
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: BottomNavigationBar(
           currentIndex: _currentIndex,
-          onTap: (index) => setState(() => _currentIndex = index),
+          onTap: (i) => setState(() => _currentIndex = i),
           items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.web), label: "Browser"),
             BottomNavigationBarItem(
-              icon: Icon(Icons.public),
-              label: "Navegador",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
+              icon: Icon(Icons.insights),
               label: "Dashboard",
             ),
           ],
         ),
-        floatingActionButton: _currentIndex == 0 && !_isMonitorMode
-            ? FloatingActionButton(
-                onPressed: () => _showAddMonitorDialog(),
-                tooltip: "Adicionar Monitor Manualmente",
-                child: const Icon(Icons.add_chart),
-              )
-            : null,
       ),
     );
+  }
+
+  Widget _buildDashboard() {
+    if (_monitoredItems.isEmpty) {
+      return const Center(child: Text("Nenhum item sendo monitorado."));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: _monitoredItems.length,
+      itemBuilder: (context, index) {
+        final item = _monitoredItems[index];
+        final isUp = item.currentValue.compareTo(item.previousValue) > 0;
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 10),
+          child: ListTile(
+            title: Text(
+              item.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+              "Atualizado: ${item.lastUpdated.hour}:${item.lastUpdated.minute}",
+            ),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  item.currentValue,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+                Icon(
+                  isUp ? Icons.trending_up : Icons.trending_flat,
+                  size: 16,
+                  color: isUp ? Colors.green : Colors.grey,
+                ),
+              ],
+            ),
+            onLongPress: () {
+              setState(() => _monitoredItems.removeAt(index));
+              _saveMonitors();
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool> _showExitDialog() async {
+    return await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text("Sair"),
+            content: const Text("Deseja fechar o monitor?"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Não"),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text("Sim"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 }
