@@ -1,6 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:vanbet/dialogs/result_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Modelo simples para organizar os detalhes de cada aposta
+class BetDetail {
+  final double odd;
+  final double stake;
+  final double potentialReturn;
+
+  BetDetail({
+    required this.odd,
+    required this.stake,
+    required this.potentialReturn,
+  });
+}
 
 class SureBetPage extends StatefulWidget {
   const SureBetPage({super.key});
@@ -10,16 +22,18 @@ class SureBetPage extends StatefulWidget {
 }
 
 class _SureBetPageState extends State<SureBetPage> {
-  List<double> _oddList = []; // Lista de odds
+  // --- ESTADO E CONTROLE ---
+  final List<double> _oddList = [];
+  final List<BetDetail> _calculationDetails = [];
+
   final TextEditingController _oddsController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
-  final FocusNode _focusNodeAmountTextfield = FocusNode();
+  final FocusNode _amountFocusNode = FocusNode();
 
-  double _totalAmount = 0; // Valor total da aposta
-  double _totalReturn = 0; // Retorno total esperado
-  double _profitOrLoss = 0; // Lucro ou perda
-  Map<String, double> _distributions =
-      {}; // Distribuições calculadas para sure bets
+  double _totalAmount = 0;
+  double _totalReturn = 0;
+  double _profitOrLoss = 0;
+  double _roi = 0;
 
   @override
   void initState() {
@@ -31,337 +45,405 @@ class _SureBetPageState extends State<SureBetPage> {
   void dispose() {
     _oddsController.dispose();
     _amountController.dispose();
-    _focusNodeAmountTextfield.dispose();
+    _amountFocusNode.dispose();
     super.dispose();
   }
 
-  // Carregar os dados salvos do SharedPreferences
-  Future<void> _loadData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+  // --- LÓGICA DE PERSISTÊNCIA ---
 
-    // Carregar as odds e montante
-    List<String>? oddsString = prefs.getStringList('oddsListSure');
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String>? oddsString = prefs.getStringList('oddsListSure');
+
     if (oddsString != null) {
       setState(() {
         _oddList.addAll(oddsString.map((e) => double.tryParse(e) ?? 0.0));
       });
     }
 
-    double amount = prefs.getDouble('totalAmountSure') ?? 0.0;
-    _amountController.text = amount == 0 ? "" : amount.toString();
+    final double amount = prefs.getDouble('totalAmountSure') ?? 0.0;
+    if (amount > 0) _amountController.text = amount.toString();
+
     _calculateSureBet();
   }
 
-  // Salvar os dados no SharedPreferences
   Future<void> _saveData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    // Salvar odds
-    List<String> oddsString = _oddList.map((e) => e.toString()).toList();
-    prefs.setStringList('oddsListSure', oddsString);
-
-    // Salvar o montante
-    double amount = double.tryParse(_amountController.text) ?? 0.0;
-    prefs.setDouble('totalAmountSure', amount);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'oddsListSure',
+      _oddList.map((e) => e.toString()).toList(),
+    );
+    final double amount =
+        double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0;
+    await prefs.setDouble('totalAmountSure', amount);
   }
 
-  // Função para calcular as distribuições das apostas e resultados
+  // --- LÓGICA DE CÁLCULO ---
+
   void _calculateSureBet() {
-    setState(() {
-      // Certifica que o montante é válido
-      _totalAmount = double.tryParse(_amountController.text) ?? 0;
+    _totalAmount =
+        double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0;
+    _calculationDetails.clear();
 
-      if (_totalAmount > 0 && _oddList.isNotEmpty) {
-        // Soma dos inversos das odds
-        double inverseSum = _oddList.fold(0, (sum, odd) => sum + 1 / odd);
+    if (_totalAmount > 0 && _oddList.isNotEmpty) {
+      double inverseSum = _oddList.fold(0, (sum, odd) => sum + (1 / odd));
+      _totalReturn = _totalAmount / inverseSum;
+      _profitOrLoss = _totalReturn - _totalAmount;
+      _roi = (_profitOrLoss / _totalAmount) * 100;
 
-        // Distribui os valores proporcionalmente para cada odd
-        _distributions = {
-          for (int i = 0; i < _oddList.length; i++)
-            "Aposta ${i + 1}": (_totalAmount / _oddList[i]) / inverseSum,
-        };
-
-        // Calcula o retorno total esperado
-        _totalReturn = _totalAmount / inverseSum;
-
-        // Calcula lucro ou perda
-        _profitOrLoss = _totalReturn - _totalAmount;
-      } else {
-        // Reseta os valores se os dados forem inválidos
-        _distributions.clear();
-        _totalReturn = 0;
-        _profitOrLoss = 0;
+      for (var odd in _oddList) {
+        double stake = (_totalAmount / odd) / inverseSum;
+        _calculationDetails.add(
+          BetDetail(odd: odd, stake: stake, potentialReturn: stake * odd),
+        );
       }
-      _saveData(); // Salva os dados ao recalcular
-    });
+    } else {
+      _totalReturn = 0;
+      _profitOrLoss = 0;
+      _roi = 0;
+    }
+    setState(() {});
+    _saveData();
+  }
+
+  // --- AÇÕES ---
+
+  void _addOdd() {
+    final double? val = double.tryParse(
+      _oddsController.text.replaceAll(',', '.'),
+    );
+    if (val != null && val > 1) {
+      setState(() {
+        _oddList.add(val);
+        _oddsController.clear();
+        _calculateSureBet();
+      });
+    }
   }
 
   void _cleanAll() {
     setState(() {
-      _oddList = []; // Lista de odds
+      _oddList.clear();
       _oddsController.clear();
       _amountController.clear();
-
-      _totalAmount = 0; // Valor total da aposta
-      _totalReturn = 0; // Retorno total esperado
-      _profitOrLoss = 0; // Lucro ou perda
-      _distributions = {}; // Distribuições calculadas para sure bets
+      _calculationDetails.clear();
+      _totalReturn = 0;
+      _profitOrLoss = 0;
+      _roi = 0;
     });
-    _saveData(); // Salva os dados ao recalcular
+    _saveData();
   }
 
-  // Função para mostrar o diálogo de resultados detalhados
-  void _showDetailedResults() {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return ResultDialog(
-          title: "Detalhes da Distribuição",
-          items: _distributions.entries.map((entry) {
-            final oddIndex = _distributions.keys.toList().indexOf(entry.key);
-            final currentOdd =
-                _oddList[oddIndex]; // Recupera a odd correspondente
-
-            return DetailItem(
-              title: "Odd ${oddIndex + 1} (${currentOdd.toStringAsFixed(2)})",
-              subtitle: "Apostar: ${entry.value.toStringAsFixed(2)} Kz",
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
+  // --- INTERFACE (UI) ---
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Aposta Segura"),
+        title: const Text("Calculadora SureBet"),
         actions: [
           IconButton(
             onPressed: _cleanAll,
             icon: const Icon(Icons.cleaning_services_outlined),
             tooltip: "Limpar tudo",
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                "Verifique se existe oportunidade de arbitragem (Sure Bet).",
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[600],
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _buildInputCard(),
+            const SizedBox(height: 16),
+            _buildOddsList(),
+            const SizedBox(height: 16),
+            if (_oddList.isNotEmpty) _buildResultCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputCard() {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _oddsController,
+              decoration: InputDecoration(
+                labelText: "Adicionar Odd",
+                prefixIcon: const Icon(Icons.trending_up),
+                suffixIcon: IconButton(
+                  onPressed: _addOdd,
+                  icon:  Icon(
+                    Icons.add_circle,
+                    color: Theme.of(context).primaryColor,
+                    size: 30,
+                  ),
                 ),
-                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
-              _buildInputSection(theme),
-              const SizedBox(height: 4),
-              _oddList.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32.0),
-                      child: Center(
-                        child: Text(
-                          "Nenhuma odd adicionada",
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _oddList.length,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onSubmitted: (_) => _addOdd(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _amountController,
+              focusNode: _amountFocusNode,
+              decoration: const InputDecoration(
+                labelText: "Investimento Total (Kz)",
+                prefixIcon: Icon(Icons.account_balance_wallet),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              onChanged: (_) => _calculateSureBet(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOddsList() {
+    if (_oddList.isEmpty) {
+      return const Opacity(
+        opacity: 0.5,
+        child: Column(
+          children: [
+            Icon(Icons.analytics_outlined, size: 64),
+            SizedBox(height: 8),
+            Text("Adicione pelo menos duas odds para calcular"),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _oddList.length,
+      itemBuilder: (context, index) {
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(
+                context,
+              ).primaryColor.withValues(alpha: 0.1),
+              child: Text(
+                "${index + 1}",
+
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            title: Text(
+              "Odd ${_oddList[index].toStringAsFixed(2)}",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            trailing: IconButton(
+              icon: const Icon(Icons.close, color: Colors.red),
+              onPressed: () {
+                setState(() {
+                  _oddList.removeAt(index);
+                  _calculateSureBet();
+                });
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResultCard() {
+    final bool isProfitable = _profitOrLoss > 0;
+    return Card(
+      color: Colors.white,
+elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            _resultRow(
+              "Possível Retorno:",
+              "${_totalReturn.toStringAsFixed(2)} Kz",
+            ),
+            const SizedBox(height: 8),
+            _resultRow(
+              isProfitable ? "Lucro Garantido:" : "Prejuízo Estimado:",
+              "${isProfitable ? '+' : ''}${_profitOrLoss.toStringAsFixed(2)} Kz",
+              valueColor: isProfitable ? Colors.green : Colors.red,
+              bold: true,
+            ),
+            _resultRow(
+              "ROI:",
+              "${_roi.toStringAsFixed(2)}%",
+              valueColor: isProfitable ? Colors.green : Colors.red,
+            ),
+            const Divider(height: 24),
+            ElevatedButton.icon(
+              onPressed: _showDetailedDistribution,
+              icon: const Icon(Icons.bar_chart),
+              label: const Text("DISTRIBUIÇÃO DAS APOSTAS"),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 45),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _resultRow(
+    String label,
+    String value, {
+    Color? valueColor,
+    bool bold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 14)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- DIÁLOGO DE DISTRIBUIÇÃO ---
+
+  void _showDetailedDistribution() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (_, scrollController) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    "Sugestão de Distribuição",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Text(
+                    "Divida seu capital da seguinte forma:",
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: scrollController,
+                      itemCount: _calculationDetails.length,
                       itemBuilder: (context, index) {
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: theme.primaryColor.withOpacity(
-                                0.1,
-                              ),
-                              child: Text(
-                                "${index + 1}",
-                                style: TextStyle(
-                                  color: theme.primaryColor,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              "Odd ${index + 1}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _oddList[index].toString(),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
+                        final item = _calculationDetails[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.grey[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Odd: ${item.odd.toStringAsFixed(2)}",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blueGrey,
+                                    ),
                                   ),
-                                ),
-                                IconButton(
-                                  onPressed: () {
-                                    // Remove a odd e recalcula
-                                    setState(() {
-                                      _oddList.removeAt(index);
-                                      _calculateSureBet();
-                                    });
-                                  },
-                                  icon: const Icon(
-                                    Icons.close,
-                                    color: Colors.red,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "${item.stake.toStringAsFixed(2)} Kz",
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  const Text(
+                                    "Retorno Bruto",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                  Text(
+                                    "${item.potentialReturn.toStringAsFixed(2)} Kz",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         );
                       },
                     ),
-              const SizedBox(height: 4),
-              _buildSummaryCard(theme),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _oddsController,
-                    decoration: InputDecoration(
-                      labelText: "Adicionar Odd",
-                      prefixIcon: const Icon(Icons.show_chart_sharp),
-                      suffixIcon: IconButton(
-                        onPressed: () {
-                          setState(() {
-                            double? newOddValue = double.tryParse(
-                              _oddsController.text,
-                            );
-                            if (newOddValue != null && newOddValue > 1) {
-                              _oddList.add(newOddValue);
-                              _oddsController.clear();
-                              _calculateSureBet();
-                            }
-                          });
-                        },
-                        icon: const Icon(
-                          Icons.check_circle,
-                          color: Colors.green,
-                        ),
-                      ),
+                  ),
+                  const Divider(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      "Custo Total: ${_totalAmount.toStringAsFixed(2)} Kz",
+                      style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    keyboardType: TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    onSubmitted: (_) =>
-                        _focusNodeAmountTextfield.requestFocus(),
-                    textInputAction: TextInputAction.next,
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              focusNode: _focusNodeAmountTextfield,
-              controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: "Montante Total (Kz)",
-                prefixIcon: Icon(Icons.attach_money),
+                ],
               ),
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              onChanged: (_) => _calculateSureBet(),
-              textInputAction: TextInputAction.done,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(ThemeData theme) {
-    final isProfitable = _profitOrLoss >= 0;
-    return Card(
-      color: theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Retorno Total",
-                  style: TextStyle(color: Colors.grey),
-                ),
-                Text(
-                  "${_totalReturn.toStringAsFixed(2)} Kz",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  isProfitable ? "Lucro Garantido" : "Perda Estimada",
-                  style: TextStyle(
-                    color: isProfitable ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  "${isProfitable ? '+' : ''}${_profitOrLoss.toStringAsFixed(2)} Kz",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isProfitable ? Colors.green : Colors.red,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            if (_distributions.isNotEmpty)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _showDetailedResults,
-                  icon: const Icon(Icons.list_alt),
-                  label: const Text("Ver Detalhes da Distribuição"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.cardTheme.color,
-                    foregroundColor: theme.primaryColor,
-                    elevation: 0,
-                    side: BorderSide(color: theme.primaryColor),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -272,9 +272,9 @@ class _SimulatePageState extends State<SimulatePage> {
 
   Widget _buildSummaryCard(ThemeData theme) {
     return Card(
-      color: theme.colorScheme.surface,
+      color: Colors.white,
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             Row(
