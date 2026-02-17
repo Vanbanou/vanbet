@@ -131,13 +131,14 @@ class _SimulatePageState extends State<SimulatePage> {
               _buildInputSection(theme),
               const SizedBox(height: 4),
               _oddList.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32.0),
-                      child: Center(
-                        child: Text(
-                          "Nenhuma odd adicionada",
-                          style: TextStyle(color: Colors.grey[400]),
-                        ),
+                  ? const Opacity(
+                      opacity: 0.5,
+                      child: Column(
+                        children: [
+                          Icon(Icons.analytics_outlined, size: 64),
+                          SizedBox(height: 8),
+                          Text("Adicione pelo menos duas odds para calcular"),
+                        ],
                       ),
                     )
                   : ListView.builder(
@@ -218,7 +219,7 @@ class _SimulatePageState extends State<SimulatePage> {
                     controller: _oddsController,
                     decoration: InputDecoration(
                       labelText: "Adicionar Odd",
-                      prefixIcon: const Icon(Icons.show_chart_sharp),
+                      prefixIcon: const Icon(Icons.trending_up),
                       suffixIcon: IconButton(
                         onPressed: () {
                           double? newOddValue = double.tryParse(
@@ -257,7 +258,7 @@ class _SimulatePageState extends State<SimulatePage> {
               keyboardType: TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(
                 labelText: "Montante Total (Kz)",
-                prefixIcon: Icon(Icons.attach_money),
+                prefixIcon: Icon(Icons.account_balance_wallet),
               ),
               textInputAction: TextInputAction.done,
               onChanged: (value) {

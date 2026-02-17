@@ -205,7 +205,7 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
                     focusNode: _stake1Focus,
                     decoration: const InputDecoration(
                       labelText: "Valor (Kz)",
-                      prefixIcon: Icon(Icons.attach_money),
+                      prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,

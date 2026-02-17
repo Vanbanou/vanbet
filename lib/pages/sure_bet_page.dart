@@ -231,6 +231,7 @@ class _SureBetPageState extends State<SureBetPage> {
                       _calculateSureBet();
                     });
                   },
+                  selectedColor: Theme.of(context).primaryColor,
                   borderRadius: BorderRadius.circular(16),
                   constraints: const BoxConstraints(
                     minHeight: 45,
@@ -377,7 +378,7 @@ class _SureBetPageState extends State<SureBetPage> {
       ),
       builder: (context) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.6,
+          initialChildSize: 0.7,
           maxChildSize: 0.9,
           minChildSize: 0.4,
           expand: false,
@@ -467,16 +468,35 @@ class _SureBetPageState extends State<SureBetPage> {
                     ),
                   ),
                   const Divider(),
-                  Text(
-                    "Total na Banca: ${_totalAmount.toStringAsFixed(2)} Kz",
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Total na Banca:",
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        "${_totalAmount.toStringAsFixed(2)} Kz",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  Text(
-                    "Você paga apenas: ${_actualCost.toStringAsFixed(2)} Kz",
-                    style: const TextStyle(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        "Você paga apenas:",
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      Text(
+                        "${_actualCost.toStringAsFixed(2)} Kz",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ), // Removido o azul
+                      ),
+                    ],
                   ),
                 ],
               ),

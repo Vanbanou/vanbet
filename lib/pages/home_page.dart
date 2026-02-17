@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vanbet/pages/system_bet_page.dart';
 import 'package:vanbet/pages/history_bet_page.dart';
 import 'package:vanbet/pages/odds_monitor_page.dart';
 import 'package:vanbet/pages/simulate_page.dart';
@@ -14,35 +15,40 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List menuTitles = [
-    "Simular aposta",
-    "Aposta segura",
-    "Recuperar aposta",
-    "Navegar",
-    "Historico ",
+    "Aposta Segura", // Prioridade 1: Lucro garantido
+    "Sistema & Distribuição", // Prioridade 2: Gestão de risco (SystemBetPage)
+    "Recuperar Aposta", // Prioridade 3: Proteção de banca
+    "Simular Múltipla", // Prioridade 4: Simulação simples
+    "Monitorar Odds", // Ferramenta de apoio
+    "Histórico", // Consulta
   ];
 
   List menuIcons = [
-    Icons.sports_score,
-    Icons.sports_outlined,
-    Icons.sports_soccer_outlined,
-    Icons.public,
-    Icons.insert_chart,
+    Icons.verified_user_outlined, // Aposta Segura
+    Icons
+        .account_tree_outlined, // Sistema & Distribuição (Substituí o 'a' pelo ícone de ramificação)
+    Icons.loop_outlined, // Recuperar
+    Icons.add_chart_outlined, // Simular
+    Icons.language_outlined, // Monitorar
+    Icons.history_outlined, // Histórico
   ];
-
-  List menuIconCollors = [
-    Colors.red,
-    Colors.green,
-    Colors.blue,
-    Colors.orange,
-    Colors.purple,
+  List menuIconColors = [
+    Colors.greenAccent[700]!, // Verde vibrante (Lucro)
+    Colors.amber[600]!, // Ouro (Sistema)
+    Colors.orangeAccent, // Laranja neon (Recuperação)
+    Colors.blueAccent, // Azul elétrico (Simulação)
+    Colors.cyan, // Ciano (Navegação)
+    Colors
+        .indigoAccent, // Roxo/Azul profundo (Histórico - muito melhor que cinza)
   ];
 
   List pages = [
-    const SimulatePage(),
-    const SureBetPage(),
-    const ReturnBetPage(),
-    OddsMonitorPage(),
-    const HistoryBetPage(),
+    const SureBetPage(), // Aposta Segura
+    const SystemBetPage(), // Distribuição (Sistema)
+    const ReturnBetPage(), // Recuperar
+    const SimulatePage(), // Simular
+    OddsMonitorPage(), // Navegar
+    const HistoryBetPage(), // Histórico
   ];
 
   @override
@@ -108,13 +114,13 @@ class _HomePageState extends State<HomePage> {
                         Container(
                           padding: const EdgeInsets.all(15),
                           decoration: BoxDecoration(
-                            color: menuIconCollors[index].withOpacity(0.1),
+                            color: menuIconColors[index].withOpacity(0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
                             menuIcons[index],
                             size: 40,
-                            color: menuIconCollors[index],
+                            color: menuIconColors[index],
                           ),
                         ),
                         const SizedBox(height: 15),
