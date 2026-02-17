@@ -21,8 +21,8 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
   double _finalStake2 = 0.0;
   double _netCenario1 = 0.0;
   double _netCenario2 = 0.0;
+  double _netBothWins = 0.0;
 
-  // Novos campos para análise da Aposta 1
   double _gross1 = 0.0;
   double _net1 = 0.0;
 
@@ -80,6 +80,7 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
       _finalStake2 = 0;
       _netCenario1 = 0;
       _netCenario2 = 0;
+      _netBothWins = 0;
       _gross1 = 0;
       _net1 = 0;
     });
@@ -95,7 +96,6 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
         double.tryParse(_manualStakeController.text.replaceAll(',', '.')) ?? 0;
 
     setState(() {
-      // Cálculo básico da Aposta 1 (Sempre visível)
       if (o1 > 0 && s1 > 0) {
         _gross1 = s1 * o1;
         _net1 = _gross1 - s1;
@@ -108,6 +108,7 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
         _finalStake2 = 0;
         _netCenario1 = 0;
         _netCenario2 = 0;
+        _netBothWins = 0;
         return;
       }
 
@@ -133,13 +134,15 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
       if (_finalStake2 > 0 && o2 > 1) {
         _netCenario1 = (s1 * o1) - (s1 + _finalStake2);
         _netCenario2 = (_finalStake2 * o2) - (s1 + _finalStake2);
+        _netBothWins = (s1 * o1) + (_finalStake2 * o2) - (s1 + _finalStake2);
       } else if (_finalStake2 > 0 && _strategyIndex == 3) {
-        // No modo manual, se ainda não houver O2, calculamos o cenário 1 parcial
         _netCenario1 = (s1 * o1) - (s1 + _finalStake2);
         _netCenario2 = 0;
+        _netBothWins = 0;
       } else {
         _netCenario1 = 0;
         _netCenario2 = 0;
+        _netBothWins = 0;
       }
     });
     _saveData();
@@ -316,7 +319,6 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // SEÇÃO NOVA: Análise da Aposta 1
             const Text(
               "POTENCIAL DA APOSTA 1",
               style: TextStyle(
@@ -334,8 +336,6 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
               ],
             ),
             const Divider(height: 32),
-
-            // SEÇÃO DE COBERTURA
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -356,9 +356,11 @@ class _ReturnBetPageState extends State<ReturnBetPage> {
               ],
             ),
             const SizedBox(height: 16),
-            _resultRow("Se Aposta 1 vencer (Net Total)", _netCenario1),
+            _resultRow("Se Aposta 1 vencer", _netCenario1),
             const SizedBox(height: 8),
-            _resultRow("Se Aposta 2 vencer (Net Total)", _netCenario2),
+            _resultRow("Se Aposta 2 vencer", _netCenario2),
+            const SizedBox(height: 8),
+            _resultRow("Se AMBAS vencerem", _netBothWins),
           ],
         ),
       ),
