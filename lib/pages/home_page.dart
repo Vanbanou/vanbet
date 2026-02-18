@@ -18,7 +18,7 @@ class _HomePageState extends State<HomePage> {
     "Aposta Segura",
     "Sistema & Distribuição",
     "Recuperar Aposta",
-    "Cobertura de Múltipla",
+    // "Cobertura de Múltipla",
     "Simular Múltipla",
     "Monitorar Odds",
     "Histórico",
