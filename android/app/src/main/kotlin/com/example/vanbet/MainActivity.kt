@@ -1,4 +1,4 @@
-package com.example.vanbet
+package com.utalahari.vanbet
 
 import io.flutter.embedding.android.FlutterActivity
 

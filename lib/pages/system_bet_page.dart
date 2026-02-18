@@ -178,7 +178,7 @@ class _SystemBetPageState extends State<SystemBetPage> {
             const SizedBox(height: 16),
             _buildOddsList(),
             const SizedBox(height: 16),
-            if (_maxReturn > 0) _buildResultCard(),
+            if (_maxReturn > 0 && _oddsList.isNotEmpty) _buildResultCard(),
           ],
         ),
       ),
@@ -224,7 +224,7 @@ class _SystemBetPageState extends State<SystemBetPage> {
                 ),
                 Switch(
                   value: _isAddingBanker,
-                  activeColor: Colors.amber[700],
+                  activeThumbColor: Colors.amber[700],
                   onChanged: (v) => setState(() => _isAddingBanker = v),
                 ),
               ],
@@ -329,8 +329,8 @@ class _SystemBetPageState extends State<SystemBetPage> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: isBanker
-              ? Colors.amber.withOpacity(0.1)
-              : Theme.of(context).primaryColor.withOpacity(0.1),
+              ? Colors.amber.withValues(alpha: 0.1)
+              : Theme.of(context).primaryColor.withValues(alpha: 0.1),
           child: Icon(
             isBanker ? Icons.star : Icons.check,
             size: 18,

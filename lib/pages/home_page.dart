@@ -15,40 +15,40 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   List menuTitles = [
-    "Aposta Segura", // Prioridade 1: Lucro garantido
-    "Sistema & Distribuição", // Prioridade 2: Gestão de risco (SystemBetPage)
-    "Recuperar Aposta", // Prioridade 3: Proteção de banca
-    "Simular Múltipla", // Prioridade 4: Simulação simples
-    "Monitorar Odds", // Ferramenta de apoio
-    "Histórico", // Consulta
+    "Aposta Segura",
+    "Sistema & Distribuição",
+    "Recuperar Aposta",
+    "Cobertura de Múltipla",
+    "Simular Múltipla",
+    "Monitorar Odds",
+    "Histórico",
   ];
 
   List menuIcons = [
-    Icons.verified_user_outlined, // Aposta Segura
-    Icons
-        .account_tree_outlined, // Sistema & Distribuição (Substituí o 'a' pelo ícone de ramificação)
-    Icons.loop_outlined, // Recuperar
-    Icons.add_chart_outlined, // Simular
-    Icons.language_outlined, // Monitorar
-    Icons.history_outlined, // Histórico
+    Icons.verified_user_outlined,
+    Icons.account_tree_outlined,
+    Icons.loop_outlined,
+    Icons.add_chart_outlined,
+    Icons.language_outlined,
+    Icons.history_outlined,
   ];
+
   List menuIconColors = [
-    Colors.greenAccent[700]!, // Verde vibrante (Lucro)
-    Colors.amber[600]!, // Ouro (Sistema)
-    Colors.orangeAccent, // Laranja neon (Recuperação)
-    Colors.blueAccent, // Azul elétrico (Simulação)
-    Colors.cyan, // Ciano (Navegação)
-    Colors
-        .indigoAccent, // Roxo/Azul profundo (Histórico - muito melhor que cinza)
+    Colors.greenAccent[700]!,
+    Colors.amber[600]!,
+    Colors.orangeAccent,
+    Colors.tealAccent[700]!,
+    Colors.blueAccent,
+    Colors.cyan,
   ];
 
   List pages = [
-    const SureBetPage(), // Aposta Segura
-    const SystemBetPage(), // Distribuição (Sistema)
-    const ReturnBetPage(), // Recuperar
-    const SimulatePage(), // Simular
-    OddsMonitorPage(), // Navegar
-    const HistoryBetPage(), // Histórico
+    const SureBetPage(),
+    const SystemBetPage(),
+    const ReturnBetPage(),
+    const SimulatePage(),
+    OddsMonitorPage(),
+    const HistoryBetPage(),
   ];
 
   @override

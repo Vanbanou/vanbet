@@ -38,6 +38,9 @@ dependencies:
   url_launcher: ^6.3.2
   webview_flutter: ^4.13.0
   shared_preferences: ^2.5.3
+  firebase_core: ^4.4.0
+  cloud_firestore: ^6.1.2
+  device_info_plus: ^12.3.0
 
 dev_dependencies:
   flutter_test:

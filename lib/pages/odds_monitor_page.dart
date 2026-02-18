@@ -280,7 +280,7 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.white,
-          elevation: 1,
+          elevation: 0,
           title: Container(
             height: 40,
             decoration: BoxDecoration(
@@ -302,7 +302,9 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
             IconButton(
               icon: Icon(
                 Icons.ads_click,
-                color: _isMonitorMode ? Colors.green : Colors.grey,
+                color: _isMonitorMode
+                    ? Theme.of(context).primaryColor
+                    : Colors.grey,
               ),
               onPressed: _toggleMonitorMode,
             ),
@@ -323,6 +325,7 @@ class _OddsMonitorPageState extends State<OddsMonitorPage> {
           ],
         ),
         bottomNavigationBar: BottomNavigationBar(
+          backgroundColor: Colors.white,
           currentIndex: _currentIndex,
           onTap: (i) => setState(() => _currentIndex = i),
           items: const [

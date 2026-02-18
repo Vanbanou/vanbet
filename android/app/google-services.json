@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "340968596573",
+    "project_id": "vanbet-1abfa",
+    "storage_bucket": "vanbet-1abfa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:340968596573:android:88def0c231198d987519b4",
+        "android_client_info": {
+          "package_name": "com.utalahari.vanbet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdbyA3tACJmeu_6tAdgdkf1vJPtfcAxOk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
